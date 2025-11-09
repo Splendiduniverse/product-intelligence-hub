@@ -412,9 +412,38 @@ const App = () => {
           </div>
         ) : (
           <div>
-            <button onClick={() => setSelectedProduct(null)} className="mb-6 text-blue-600 hover:text-blue-700 font-medium">
-              ← Back
-            </button>
+            <div className="flex items-center justify-between mb-6">
+              <button 
+                onClick={() => setSelectedProduct(null)} 
+                className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all flex items-center gap-2"
+              >
+                ← Back to Search
+              </button>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Search other products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      setSelectedProduct(null);
+                      searchProducts();
+                    }
+                  }}
+                  className="px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  onClick={() => {
+                    setSelectedProduct(null);
+                    searchProducts();
+                  }}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg"
+                >
+                  Search
+                </button>
+              </div>
+            </div>
 
             <div className="grid lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
