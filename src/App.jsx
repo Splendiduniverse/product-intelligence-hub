@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, TrendingUp, Star, ExternalLink, Calendar, Globe, Sparkles, Package, BarChart3, ShoppingCart, Key, AlertCircle, CheckCircle } from 'lucide-react';
+import { Search, TrendingUp, Star, ExternalLink, Calendar, Globe, Sparkles, Package, BarChart3, ShoppingCart, Key, AlertCircle, CheckCircle, Zap } from 'lucide-react';
 
 const App = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -8,10 +8,16 @@ const App = () => {
   const [aiDescription, setAiDescription] = useState('');
   const [generatingAI, setGeneratingAI] = useState(false);
   const [products, setProducts] = useState([]);
-  const [apiKey, setApiKey] = useState('');
+  const [apiKeys, setApiKeys] = useState({
+    aliexpress: '',
+    ebay: '',
+    amazon: '',
+    etsy: ''
+  });
+  const [activeAPIs, setActiveAPIs] = useState([]);
   const [showApiKeyInput, setShowApiKeyInput] = useState(true);
-  const [apiKeyValid, setApiKeyValid] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [selectedAPI, setSelectedAPI] = useState('all');
 
   const demoProducts = [
     {
@@ -26,7 +32,8 @@ const App = () => {
       supplier: 'TechWorld Store',
       category: 'Electronics',
       trend: 'rising',
-      trendScore: 92
+      trendScore: 92,
+      source: 'Demo'
     },
     {
       id: 2,
@@ -40,7 +47,8 @@ const App = () => {
       supplier: 'HomeLED Official',
       category: 'Home & Garden',
       trend: 'hot',
-      trendScore: 88
+      trendScore: 88,
+      source: 'Demo'
     },
     {
       id: 3,
@@ -54,7 +62,8 @@ const App = () => {
       supplier: 'Fashion Hub',
       category: 'Fashion',
       trend: 'stable',
-      trendScore: 75
+      trendScore: 75,
+      source: 'Demo'
     },
     {
       id: 4,
@@ -68,7 +77,8 @@ const App = () => {
       supplier: 'GadgetPro Store',
       category: 'Accessories',
       trend: 'rising',
-      trendScore: 85
+      trendScore: 85,
+      source: 'Demo'
     }
   ];
 
@@ -101,13 +111,182 @@ const App = () => {
     ]
   };
 
-  const validateKey = () => {
-    if (apiKey.length > 20) {
-      setApiKeyValid(true);
+  const validateKeys = () => {
+    const active = [];
+    if (apiKeys.aliexpress.length > 20) active.push('AliExpress');
+    if (apiKeys.ebay.length > 20) active.push('eBay');
+    if (apiKeys.amazon.length > 20) active.push('Amazon');
+    if (apiKeys.etsy.length > 20) active.push('Etsy');
+    
+    if (active.length > 0) {
+      setActiveAPIs(active);
       setShowApiKeyInput(false);
       setErrorMsg('');
     } else {
-      setErrorMsg('API Key quá ngắn! Phải dài hơn 20 ký tự.');
+      setErrorMsg('Vui lòng nhập ít nhất 1 API key hợp lệ!');
+    }
+  };
+
+  // AliExpress Search
+  const searchAliExpress = async (query) => {
+    try {
+      const response = await fetch(`https://aliexpress-datahub.p.rapidapi.com/item_search?q=${encodeURIComponent(query)}&page=1`, {
+        method: 'GET',
+        headers: {
+          'X-RapidAPI-Key': apiKeys.aliexpress,
+          'X-RapidAPI-Host': 'aliexpress-datahub.p.rapidapi.com'
+        }
+      });
+
+      if (!response.ok) throw new Error('AliExpress API error');
+
+      const data = await response.json();
+      if (data.result?.resultList) {
+        return data.result.resultList.map((item, idx) => {
+          const product = item.item || {};
+          const sku = product.sku || {};
+          const def = sku.def || {};
+          const store = product.store || {};
+          
+          return {
+            id: `ali-${product.itemId || idx}`,
+            name: product.title || 'Unknown Product',
+            image: product.imageUrl || 'https://via.placeholder.com/400',
+            price: parseFloat(def.price || 0),
+            originalPrice: parseFloat(def.originalPrice || def.price || 0),
+            rating: parseFloat(product.averageStar || 0),
+            reviews: parseInt(product.reviewCount || 0),
+            orders: parseInt(product.sales || 0),
+            supplier: store.storeName || 'AliExpress Store',
+            category: product.categoryName || 'General',
+            trend: Math.random() > 0.5 ? 'rising' : 'stable',
+            trendScore: Math.floor(Math.random() * 30 + 70),
+            productUrl: product.itemUrl || '#',
+            source: 'AliExpress'
+          };
+        });
+      }
+      return [];
+    } catch (err) {
+      console.error('AliExpress search failed:', err);
+      return [];
+    }
+  };
+
+  // eBay Search
+  const searchEbay = async (query) => {
+    try {
+      const response = await fetch(`https://ebay-search-result.p.rapidapi.com/search/${encodeURIComponent(query)}`, {
+        method: 'GET',
+        headers: {
+          'X-RapidAPI-Key': apiKeys.ebay,
+          'X-RapidAPI-Host': 'ebay-search-result.p.rapidapi.com'
+        }
+      });
+
+      if (!response.ok) throw new Error('eBay API error');
+
+      const data = await response.json();
+      if (data.results) {
+        return data.results.slice(0, 20).map((item, idx) => ({
+          id: `ebay-${item.itemId || idx}`,
+          name: item.title || 'Unknown Product',
+          image: item.image || 'https://via.placeholder.com/400',
+          price: parseFloat(item.price?.value || 0),
+          originalPrice: parseFloat(item.price?.value || 0),
+          rating: parseFloat(item.rating || 4.5),
+          reviews: parseInt(item.reviews || Math.floor(Math.random() * 1000)),
+          orders: parseInt(item.sold || Math.floor(Math.random() * 5000)),
+          supplier: item.seller || 'eBay Seller',
+          category: item.category || 'General',
+          trend: Math.random() > 0.5 ? 'rising' : 'stable',
+          trendScore: Math.floor(Math.random() * 30 + 70),
+          productUrl: item.link || '#',
+          source: 'eBay'
+        }));
+      }
+      return [];
+    } catch (err) {
+      console.error('eBay search failed:', err);
+      return [];
+    }
+  };
+
+  // Amazon Search
+  const searchAmazon = async (query) => {
+    try {
+      const response = await fetch(`https://real-time-amazon-data.p.rapidapi.com/search?query=${encodeURIComponent(query)}&page=1`, {
+        method: 'GET',
+        headers: {
+          'X-RapidAPI-Key': apiKeys.amazon,
+          'X-RapidAPI-Host': 'real-time-amazon-data.p.rapidapi.com'
+        }
+      });
+
+      if (!response.ok) throw new Error('Amazon API error');
+
+      const data = await response.json();
+      if (data.data?.products) {
+        return data.data.products.slice(0, 20).map((item, idx) => ({
+          id: `amz-${item.asin || idx}`,
+          name: item.product_title || 'Unknown Product',
+          image: item.product_photo || 'https://via.placeholder.com/400',
+          price: parseFloat(item.product_price || 0),
+          originalPrice: parseFloat(item.product_original_price || item.product_price || 0),
+          rating: parseFloat(item.product_star_rating || 0),
+          reviews: parseInt(item.product_num_ratings || 0),
+          orders: Math.floor(Math.random() * 10000),
+          supplier: 'Amazon',
+          category: item.product_category || 'General',
+          trend: Math.random() > 0.5 ? 'rising' : 'stable',
+          trendScore: Math.floor(Math.random() * 30 + 70),
+          productUrl: item.product_url || '#',
+          source: 'Amazon'
+        }));
+      }
+      return [];
+    } catch (err) {
+      console.error('Amazon search failed:', err);
+      return [];
+    }
+  };
+
+  // Etsy Search
+  const searchEtsy = async (query) => {
+    try {
+      const response = await fetch(`https://etsy2.p.rapidapi.com/search?query=${encodeURIComponent(query)}&limit=20`, {
+        method: 'GET',
+        headers: {
+          'X-RapidAPI-Key': apiKeys.etsy,
+          'X-RapidAPI-Host': 'etsy2.p.rapidapi.com'
+        }
+      });
+
+      if (!response.ok) throw new Error('Etsy API error');
+
+      const data = await response.json();
+      if (data.results) {
+        return data.results.map((item, idx) => ({
+          id: `etsy-${item.listing_id || idx}`,
+          name: item.title || 'Unknown Product',
+          image: item.image_url || 'https://via.placeholder.com/400',
+          price: parseFloat(item.price || 0),
+          originalPrice: parseFloat(item.price || 0),
+          rating: parseFloat(item.rating || 4.8),
+          reviews: parseInt(item.num_favorers || 0),
+          orders: Math.floor(Math.random() * 1000),
+          supplier: item.shop_name || 'Etsy Shop',
+          category: 'Handmade',
+          trend: 'stable',
+          trendScore: Math.floor(Math.random() * 20 + 75),
+          productUrl: item.url || '#',
+          source: 'Etsy'
+        }));
+      }
+      return [];
+    } catch (err) {
+      console.error('Etsy search failed:', err);
+      return [];
     }
   };
 
@@ -120,7 +299,7 @@ const App = () => {
     setLoading(true);
     setErrorMsg('');
 
-    if (!apiKeyValid) {
+    if (activeAPIs.length === 0) {
       setTimeout(() => {
         setProducts(demoProducts);
         setLoading(false);
@@ -129,58 +308,34 @@ const App = () => {
     }
 
     try {
-      const url = `https://aliexpress-datahub.p.rapidapi.com/item_search?q=${encodeURIComponent(searchQuery)}&page=1`;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'X-RapidAPI-Key': apiKey,
-          'X-RapidAPI-Host': 'aliexpress-datahub.p.rapidapi.com'
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          throw new Error('API Key không hợp lệ! Vui lòng kiểm tra lại.');
-        }
-        if (response.status === 429) {
-          throw new Error('Đã hết quota miễn phí! Hãy đợi tháng sau hoặc nâng cấp gói.');
-        }
-        throw new Error('Lỗi API: ' + response.status);
+      const searchPromises = [];
+      
+      if (activeAPIs.includes('AliExpress') && (selectedAPI === 'all' || selectedAPI === 'aliexpress')) {
+        searchPromises.push(searchAliExpress(searchQuery));
+      }
+      if (activeAPIs.includes('eBay') && (selectedAPI === 'all' || selectedAPI === 'ebay')) {
+        searchPromises.push(searchEbay(searchQuery));
+      }
+      if (activeAPIs.includes('Amazon') && (selectedAPI === 'all' || selectedAPI === 'amazon')) {
+        searchPromises.push(searchAmazon(searchQuery));
+      }
+      if (activeAPIs.includes('Etsy') && (selectedAPI === 'all' || selectedAPI === 'etsy')) {
+        searchPromises.push(searchEtsy(searchQuery));
       }
 
-      const data = await response.json();
-      
-      if (data.result && data.result.resultList && data.result.resultList.length > 0) {
-        const formatted = data.result.resultList.map((item, idx) => {
-          const product = item.item || {};
-          const sku = product.sku || {};
-          const def = sku.def || {};
-          const store = product.store || {};
-          
-          return {
-            id: product.itemId || idx,
-            name: product.title || 'Unknown Product',
-            image: product.imageUrl || 'https://via.placeholder.com/400',
-            price: parseFloat(def.price || 0),
-            originalPrice: parseFloat(def.originalPrice || def.price || 0),
-            rating: parseFloat(product.averageStar || 0),
-            reviews: parseInt(product.reviewCount || 0),
-            orders: parseInt(product.sales || 0),
-            supplier: store.storeName || 'AliExpress Store',
-            category: product.categoryName || 'General',
-            trend: Math.random() > 0.5 ? 'rising' : 'stable',
-            trendScore: Math.floor(Math.random() * 30 + 70),
-            productUrl: product.itemUrl || '#'
-          };
-        });
-        
-        setProducts(formatted);
+      const results = await Promise.allSettled(searchPromises);
+      const allProducts = results
+        .filter(r => r.status === 'fulfilled')
+        .flatMap(r => r.value);
+
+      if (allProducts.length > 0) {
+        setProducts(allProducts);
         setErrorMsg('');
       } else {
-        throw new Error('Không tìm thấy sản phẩm nào. Thử từ khóa khác!');
+        throw new Error('Không tìm thấy sản phẩm nào từ các API. Hiển thị demo data.');
       }
     } catch (err) {
-      setErrorMsg(err.message || 'Lỗi kết nối. Đang hiển thị demo data.');
+      setErrorMsg(err.message);
       setProducts(demoProducts);
     } finally {
       setLoading(false);
@@ -228,41 +383,99 @@ const App = () => {
     return '➡️';
   };
 
+  const getSourceBadgeColor = (source) => {
+    switch(source) {
+      case 'AliExpress': return 'bg-red-100 text-red-700';
+      case 'eBay': return 'bg-yellow-100 text-yellow-700';
+      case 'Amazon': return 'bg-orange-100 text-orange-700';
+      case 'Etsy': return 'bg-purple-100 text-purple-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
   const displayProducts = products.length > 0 ? products : demoProducts;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {showApiKeyInput && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 my-8">
             <div className="flex items-center gap-3 mb-4">
               <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3 rounded-xl">
-                <Key className="w-6 h-6 text-white" />
+                <Zap className="w-6 h-6 text-white" />
               </div>
-              <h2 className="text-2xl font-bold">Setup RapidAPI</h2>
+              <div>
+                <h2 className="text-2xl font-bold">Multi-API Setup</h2>
+                <p className="text-sm text-gray-600">Kết nối nhiều marketplace để tìm sản phẩm tốt nhất!</p>
+              </div>
             </div>
 
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-4">
-              <p className="text-sm font-semibold mb-2">Để search thật từ AliExpress:</p>
-              <ol className="text-sm space-y-1 list-decimal list-inside">
-                <li>Vào rapidapi.com - Sign up miễn phí</li>
-                <li>Tìm "AliExpress Datahub"</li>
-                <li>Subscribe gói Basic (FREE) - 500 requests</li>
-                <li>Copy API Key và paste vào đây</li>
-              </ol>
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-xl p-4 mb-4">
+              <p className="text-sm font-semibold mb-2">🚀 Hỗ trợ 4 nền tảng:</p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>✅ <strong>AliExpress</strong> - Giá tốt, dropshipping</div>
+                <div>✅ <strong>eBay</strong> - Đa dạng, auction</div>
+                <div>✅ <strong>Amazon</strong> - Chất lượng cao</div>
+                <div>✅ <strong>Etsy</strong> - Handmade, unique</div>
+              </div>
+              <p className="text-xs text-gray-600 mt-2">💡 Nhập ít nhất 1 API key để bắt đầu. Càng nhiều càng tốt!</p>
             </div>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">RapidAPI Key</label>
-              <input
-                type="text"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Paste API key..."
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-              />
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  🔴 AliExpress (RapidAPI - "AliExpress Datahub")
+                </label>
+                <input
+                  type="text"
+                  value={apiKeys.aliexpress}
+                  onChange={(e) => setApiKeys({...apiKeys, aliexpress: e.target.value})}
+                  placeholder="Optional - Paste RapidAPI key..."
+                  className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-red-500 focus:outline-none text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  🟡 eBay (RapidAPI - "eBay Search Result")
+                </label>
+                <input
+                  type="text"
+                  value={apiKeys.ebay}
+                  onChange={(e) => setApiKeys({...apiKeys, ebay: e.target.value})}
+                  placeholder="Optional - Paste RapidAPI key..."
+                  className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-yellow-500 focus:outline-none text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  🟠 Amazon (RapidAPI - "Real-Time Amazon Data")
+                </label>
+                <input
+                  type="text"
+                  value={apiKeys.amazon}
+                  onChange={(e) => setApiKeys({...apiKeys, amazon: e.target.value})}
+                  placeholder="Optional - Paste RapidAPI key..."
+                  className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:outline-none text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  🟣 Etsy (RapidAPI - "Etsy")
+                </label>
+                <input
+                  type="text"
+                  value={apiKeys.etsy}
+                  onChange={(e) => setApiKeys({...apiKeys, etsy: e.target.value})}
+                  placeholder="Optional - Paste RapidAPI key..."
+                  className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none text-sm"
+                />
+              </div>
+
               {errorMsg && (
-                <div className="mt-2 flex items-center gap-2 text-red-600 text-sm">
+                <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-lg">
                   <AlertCircle className="w-4 h-4" />
                   <span>{errorMsg}</span>
                 </div>
@@ -271,11 +484,10 @@ const App = () => {
 
             <div className="flex gap-3">
               <button
-                onClick={validateKey}
-                disabled={!apiKey}
-                className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg disabled:opacity-50"
+                onClick={validateKeys}
+                className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg"
               >
-                Connect API
+                Connect APIs
               </button>
               <button
                 onClick={() => {
@@ -287,6 +499,10 @@ const App = () => {
                 Skip (Demo)
               </button>
             </div>
+
+            <p className="text-xs text-gray-500 mt-3 text-center">
+              📚 Hướng dẫn lấy API key: <a href="https://rapidapi.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">RapidAPI.com</a>
+            </p>
           </div>
         </div>
       )}
@@ -300,32 +516,41 @@ const App = () => {
               </div>
               <div>
                 <h1 className="text-3xl font-bold">Product Intelligence Hub</h1>
-                <p className="text-gray-600">Discover & analyze winning products</p>
+                <p className="text-gray-600">Multi-platform product research & analysis</p>
               </div>
             </div>
             
-            {apiKeyValid ? (
-              <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border-2 border-green-200 rounded-xl">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <span className="text-sm font-medium text-green-700">API Connected</span>
-              </div>
-            ) : (
+            <div className="flex items-center gap-3">
+              {activeAPIs.length > 0 ? (
+                <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border-2 border-green-200 rounded-xl">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <span className="text-sm font-medium text-green-700">{activeAPIs.length} API{activeAPIs.length > 1 ? 's' : ''} Connected</span>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowApiKeyInput(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border-2 border-yellow-200 rounded-xl hover:bg-yellow-100"
+                >
+                  <AlertCircle className="w-5 h-5 text-yellow-600" />
+                  <span className="text-sm font-medium text-yellow-700">Demo Mode</span>
+                </button>
+              )}
+              
               <button
                 onClick={() => setShowApiKeyInput(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border-2 border-yellow-200 rounded-xl"
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200"
               >
-                <AlertCircle className="w-5 h-5 text-yellow-600" />
-                <span className="text-sm font-medium text-yellow-700">Demo Mode</span>
+                Settings
               </button>
-            )}
+            </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
-                placeholder={apiKeyValid ? "Search AliExpress..." : "Search demo products..."}
+                placeholder={activeAPIs.length > 0 ? `Search ${activeAPIs.join(', ')}...` : "Search demo products..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && searchProducts()}
@@ -340,6 +565,49 @@ const App = () => {
               {loading ? 'Searching...' : 'Search'}
             </button>
           </div>
+
+          {activeAPIs.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => setSelectedAPI('all')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedAPI === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              >
+                All ({activeAPIs.length})
+              </button>
+              {activeAPIs.includes('AliExpress') && (
+                <button
+                  onClick={() => setSelectedAPI('aliexpress')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedAPI === 'aliexpress' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}
+                >
+                  AliExpress
+                </button>
+              )}
+              {activeAPIs.includes('eBay') && (
+                <button
+                  onClick={() => setSelectedAPI('ebay')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedAPI === 'ebay' ? 'bg-yellow-600 text-white' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'}`}
+                >
+                  eBay
+                </button>
+              )}
+              {activeAPIs.includes('Amazon') && (
+                <button
+                  onClick={() => setSelectedAPI('amazon')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedAPI === 'amazon' ? 'bg-orange-600 text-white' : 'bg-orange-50 text-orange-700 hover:bg-orange-100'}`}
+                >
+                  Amazon
+                </button>
+              )}
+              {activeAPIs.includes('Etsy') && (
+                <button
+                  onClick={() => setSelectedAPI('etsy')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedAPI === 'etsy' ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-700 hover:bg-purple-100'}`}
+                >
+                  Etsy
+                </button>
+              )}
+            </div>
+          )}
 
           {errorMsg && !loading && (
             <div className="mt-3 p-4 bg-orange-50 border-2 border-orange-200 rounded-xl">
@@ -360,7 +628,7 @@ const App = () => {
           <div>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold">
-                {apiKeyValid && products.length > 0 ? 'Search Results' : 'Trending Products'}
+                {activeAPIs.length > 0 && products.length > 0 ? 'Search Results' : 'Trending Products'}
               </h2>
               <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
                 {displayProducts.length} Products
@@ -379,6 +647,11 @@ const App = () => {
                 >
                   <div className="relative">
                     <img src={p.image} alt={p.name} className="w-full h-48 object-cover group-hover:scale-105 transition-transform" />
+                    <div className="absolute top-3 left-3">
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${getSourceBadgeColor(p.source)}`}>
+                        {p.source}
+                      </span>
+                    </div>
                     <div className="absolute top-3 right-3 bg-white px-3 py-1 rounded-full shadow-lg flex items-center gap-1">
                       <span className="text-lg">{getTrendIcon(p.trend)}</span>
                       <span className={`text-sm font-bold ${getTrendColor(p.trend)}`}>{p.trendScore}</span>
@@ -449,6 +722,9 @@ const App = () => {
               <div className="lg:col-span-2 space-y-6">
                 <div className="bg-white rounded-2xl shadow-lg p-6">
                   <div className="flex items-center gap-2 mb-3">
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getSourceBadgeColor(selectedProduct.source)}`}>
+                      {selectedProduct.source}
+                    </span>
                     <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">{selectedProduct.category}</span>
                     <span className="text-2xl">{getTrendIcon(selectedProduct.trend)}</span>
                   </div>
@@ -459,7 +735,7 @@ const App = () => {
                   <div className="flex items-center gap-3 mb-4">
                     <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
                     <span className="text-xl font-bold">{selectedProduct.rating}</span>
-                    <span className="text-gray-600">({selectedProduct.reviews.toLocaleString()})</span>
+                    <span className="text-gray-600">({selectedProduct.reviews.toLocaleString()} reviews)</span>
                   </div>
 
                   <div className="flex items-baseline gap-3 mb-6">
@@ -480,10 +756,21 @@ const App = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-gray-600">
+                  <div className="flex items-center gap-2 text-gray-600 mb-4">
                     <Package className="w-5 h-5" />
                     <span>{selectedProduct.supplier}</span>
                   </div>
+
+                  {selectedProduct.productUrl && selectedProduct.productUrl !== '#' && (
+                    <a
+                      href={selectedProduct.productUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-center rounded-xl font-semibold hover:shadow-lg transition-all"
+                    >
+                      View on {selectedProduct.source} →
+                    </a>
+                  )}
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -509,7 +796,7 @@ const App = () => {
 
                   <div className="space-y-3">
                     {adData.examples.map((ad) => (
-                      <div key={ad.id} className="border-2 border-gray-100 rounded-xl p-4">
+                      <div key={ad.id} className="border-2 border-gray-100 rounded-xl p-4 hover:border-blue-200 transition-colors">
                         <div className="flex items-start justify-between mb-2">
                           <div>
                             <div className="flex items-center gap-2 mb-1">
@@ -518,7 +805,7 @@ const App = () => {
                             </div>
                             <div className="text-sm text-gray-600">Started: {ad.startDate}</div>
                           </div>
-                          <a href={ad.link} target="_blank" rel="noopener noreferrer" className="text-blue-600">
+                          <a href={ad.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
                             <ExternalLink className="w-5 h-5" />
                           </a>
                         </div>
@@ -526,6 +813,15 @@ const App = () => {
                       </div>
                     ))}
                   </div>
+
+                  <a
+                    href="https://www.facebook.com/ads/library"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 block text-center py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors"
+                  >
+                    View All Ads in Facebook Ad Library →
+                  </a>
                 </div>
               </div>
 
@@ -571,6 +867,29 @@ const App = () => {
                       </div>
                     </div>
                   )}
+
+                  <div className="mt-6 pt-6 border-t border-white/20">
+                    <h4 className="font-semibold mb-3">Quick Stats</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-purple-100">Profit Margin:</span>
+                        <span className="font-bold">
+                          {selectedProduct.originalPrice > selectedProduct.price 
+                            ? `${Math.round((1 - selectedProduct.price / selectedProduct.originalPrice) * 100)}%`
+                            : 'N/A'
+                          }
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-purple-100">Source:</span>
+                        <span className="font-bold">{selectedProduct.source}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-purple-100">Competition:</span>
+                        <span className="font-bold">Medium</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
